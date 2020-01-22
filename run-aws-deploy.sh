@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-#  One script to rule them all, one script to find them, One script to bring them all and in the darkness bind them.
+#  One script to rule them all, 
+#  one script to find them, 
+#  One script to bring them all 
+#  and in the darkness bind them.
 #
 set -ex
 #AWS_SECRET_KEY_ID=${AWS_SECRET_ACCESS_KEY:?'Must provide access key id'}
@@ -40,6 +43,7 @@ cleanup(){
     rm -vf elasticbeanstalk/deploy/*
     rm -rf elasticbeanstalk/deploy/.elasticbeanstalk*
     rm -rf elasticbeanstalk/deploy/.gitignore
+    rm -rf cloudfront/cloudfront.json
 }
 
 trap cleanup EXIT
@@ -138,8 +142,26 @@ else
 fi
 
 sh "eb status --verbose"
+cd $CWD
 
 ## CLOUDFRONT (CDN and reverse proxy)
-#AWS_CF_LIST=$(aws cloudfront list-distributions --profile "${AWS_PROFILE}")
-#aws cloudfront wait distribution-deployed --id $AWS_CF_ID 
-#aws elasticbeanstalk describe-environments --environment-names employees-api-master  --query "Environments[*].EndpointURL"
+export S3_ORIGIN_ID="S3-${TEST_PAGE_BUCKET}"
+export S3_DOMAIN_NAME="${S3_ORIGIN_ID}.s3-website-${AWS_DEFAULT_REGION}.amazonaws.com"
+export ELB_ORIGIN_ID="ELB-${EB_ENVIRONMENT_NAME}"
+export CDN_COMMENT=${EB_ENVIRONMENT_NAME}
+ELB_DOMAIN_NAME=$(aws elasticbeanstalk describe-environments --environment-names ${EB_ENVIRONMENT_NAME} --query "Environments[?Status=='Ready'].EndpointURL"))
+export ELB_DOMAIN_NAME
+
+cd cloudfront
+echo 'Rendering cloudfront configurations'
+eval "echo \"$(<cloudfront.config.skeleton.json)\"" 2> /dev/null > cloudfront.json
+
+AWS_CF_LIST=$(aws cloudfront list-distributions --profile "${AWS_PROFILE}")
+if [[ "$CDN_COMMENT" != *${AWS_CF_LIST}* ]]; then
+    aws cloudfront create-distribution --default-root-object index.html --distribution-config cloudfront.json
+    AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]')
+    aws cloudfront wait distribution-deployed --id ${AWS_CF_ID}
+else
+    AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]')
+    aws cloudfront create-invalidation --distribution-id ${AWS_CF_ID} --paths '*''
+fi

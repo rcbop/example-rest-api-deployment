@@ -17,9 +17,11 @@ db_connect = create_engine(f'sqlite:///data/{DB_FILE}')
 app = Flask(__name__)
 
 if API_PREFIX:
-    app.config["APPLICATION_ROOT"] = API_PREFIX
+    app.logger.info(f'using API_PREFIX :: {API_PREFIX}')
+    api = Api(app, prefix=API_PREFIX)
+else:
+    api = Api(app)
 
-api = Api(app)
 CORS(app)
 
 class Employees(Resource):
@@ -64,4 +66,3 @@ api.add_resource(Employees_Title_Update,'/employees_update/<employee_id>') #atua
 
 if __name__ == '__main__':
     app.run(host=HOSTNAME, port=PORT)
-    print('Started API')
