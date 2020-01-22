@@ -11,11 +11,15 @@ from sqlalchemy import create_engine
 HOSTNAME = os.getenv('HOST', 'localhost')
 PORT = os.getenv('PORT', '5000')
 DB_FILE = os.getenv('DB_FILE', 'chinook.db')
+API_PREFIX = os.getenv('API_PREFIX')
 
 db_connect = create_engine(f'sqlite:///data/{DB_FILE}')
 app = Flask(__name__)
-api = Api(app)
 
+if API_PREFIX:
+    app.config["APPLICATION_ROOT"] = API_PREFIX
+
+api = Api(app)
 CORS(app)
 
 class Employees(Resource):

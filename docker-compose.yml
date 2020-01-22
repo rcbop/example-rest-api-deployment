@@ -9,10 +9,11 @@ services:
       context: .
     environment:
     - FLASK_APP=server.py
-    - HOST=0.0.0.0
-    - PORT=${CONTAINER_PORT:-8080}
+    - HOST=${SERVICE_HOST:-0.0.0.0}
+    - PORT=${SERVICE_PORT:-8080}
     - DB_FILE=chinook.db
-    - FLASK_ENV=${ENVIRONMENT:-production}
+    - FLASK_ENV=${ENVIRONMENT:-development}
+    - API_PREFIX=''
     volumes:
     - ./data:/app/data
     entrypoint:

@@ -13,11 +13,18 @@ export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 export DOCKER_IMAGE_NAME='employees-api'
 export DOCKER_DATA_IMAGE='data-wrapper'
 export DOCKER_IMAGE_TAG=${GIT_BRANCH}
-export CONTAINER_PORT='8080'
+
+export SERVICE_HOST='0.0.0.0'
+export SERVICE_PORT='8080'
+export DB_FILE='chinook.db'
+export FLASK_ENV='production'
+export FLASK_APP='server.py'
+export API_PREFIX='/api'
+
 export AWS_PROFILE='default'
 export APP_NAME=${DOCKER_IMAGE_NAME}
-export ENVIRONMENT_NAME=${APP_NAME}-${GIT_BRANCH}
-export EFS_TOKEN='EBFileSystem'
+export EB_ENVIRONMENT_NAME=${APP_NAME}-${GIT_BRANCH}
+#export EFS_TOKEN='EBFileSystem'
 export BACKEND_INSTANCE_TYPE='t2.micro'
 export TEST_PAGE_BUCKET="rcbop-test-service-${GIT_BRANCH}"
 
@@ -31,7 +38,8 @@ cleanup(){
     echo 'cleaning up work dir'
     rm -vf elasticbeanstalk/deploy/.ebextensions/eb-efs-config.yaml
     rm -vf elasticbeanstalk/deploy/*
-    rm -vrf elasticbeanstalk/deploy/.*
+    rm -rf elasticbeanstalk/deploy/.elasticbeanstalk*
+    rm -rf elasticbeanstalk/deploy/.gitignore
 }
 
 trap cleanup EXIT
@@ -100,29 +108,33 @@ echo 'Grant ECR read/pull rights to eb ec2 role'
 aws iam attach-role-policy --role-name "aws-elasticbeanstalk-ec2-role" --policy-arn "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 echo 'ok'
 
-if [[ "$APP_LIST" != *${ENVIRONMENT_NAME}* ]]; then
+if [[ "$APP_LIST" != *${EB_ENVIRONMENT_NAME}* ]]; then
     echo 'Creting ElasticBeanstalk Application'
-    aws elasticbeanstalk create-application --application-name ${ENVIRONMENT_NAME} --profile ${AWS_PROFILE}
+    aws elasticbeanstalk create-application --application-name ${EB_ENVIRONMENT_NAME} --profile ${AWS_PROFILE}
     echo 'ok'
 fi
 
+echo 'starting elastic beanstalk setup'
 cd elasticbeanstalk
 echo 'Rendering dockerun eb template'
 eval "echo \"$(<Dockerrun.aws.single.json.tmpl)\"" 2> /dev/null > deploy/Dockerrun.aws.json
 
+echo 'Rendering ebextensions envvars options.config'
+eval "echo \"$(<options.config.tmpl)\"" 2> /dev/null > deploy/.ebextensions/options.config
+
 # single container setup
 cd deploy
 echo 'init elasticbeanstalk cli'
-eb init ${ENVIRONMENT_NAME} --region ${AWS_DEFAULT_REGION} -p "docker" --profile ${AWS_PROFILE}
-ENV_CHECK=$(eb list --profile ${AWS_PROFILE} | grep $ENVIRONMENT_NAME || echo 'NOT_CREATED')
+eb init ${EB_ENVIRONMENT_NAME} --region ${AWS_DEFAULT_REGION} -p "docker" --profile ${AWS_PROFILE}
+ENV_CHECK=$(eb list --profile ${AWS_PROFILE} | grep $EB_ENVIRONMENT_NAME || echo 'NOT_CREATED')
 
 if [[ "$ENV_CHECK" == 'NOT_CREATED' ]]; then
-    echo "Creating beanstalk environment :: ${ENVIRONMENT_NAME}"
-    eb create ${ENVIRONMENT_NAME} -i ${BACKEND_INSTANCE_TYPE} --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
+    echo "Creating beanstalk environment :: ${EB_ENVIRONMENT_NAME}"
+    eb create ${EB_ENVIRONMENT_NAME} -i ${BACKEND_INSTANCE_TYPE} --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
 else
-    echo "Deploying on beanstalk environment :: ${ENVIRONMENT_NAME}"
-    eb use ${ENVIRONMENT_NAME} --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
-    eb deploy ${ENVIRONMENT_NAME} -l "$(date "+%Y%m%d-%H%M%S")-$(uuidgen)" --staged --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
+    echo "Deploying on beanstalk environment :: ${EB_ENVIRONMENT_NAME}"
+    eb use ${EB_ENVIRONMENT_NAME} --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
+    eb deploy ${EB_ENVIRONMENT_NAME} -l "$(date "+%Y%m%d-%H%M%S")-$(uuidgen)" --staged --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
 fi
 
 sh "eb status --verbose"
@@ -130,3 +142,4 @@ sh "eb status --verbose"
 ## CLOUDFRONT (CDN and reverse proxy)
 #AWS_CF_LIST=$(aws cloudfront list-distributions --profile "${AWS_PROFILE}")
 #aws cloudfront wait distribution-deployed --id $AWS_CF_ID 
+#aws elasticbeanstalk describe-environments --environment-names employees-api-master  --query "Environments[*].EndpointURL"
