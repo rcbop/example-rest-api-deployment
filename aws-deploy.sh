@@ -105,6 +105,7 @@ fi
 
 cd elasticbeanstalk
 echo 'init elasticbeanstalk cli'
+#eb init ${ENVIRONMENT_NAME} --region ${AWS_REGION} -p "64bit Amazon Linux 2016.09 v2.3.0 running Multi-container Docker 1.11.2 (Generic)" --profile ${AWS_PROFILE}
 eb init ${ENVIRONMENT_NAME} --region ${AWS_REGION} -p "docker" --profile ${AWS_PROFILE}
 
 ENV_CHECK=$(eb list --profile ${AWS_PROFILE} | grep $ENVIRONMENT_NAME || echo 'NOT_CREATED')
