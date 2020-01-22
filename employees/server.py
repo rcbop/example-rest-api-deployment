@@ -1,15 +1,20 @@
-from flask import Flask, request
-from flask_restful import Resource, Api
-from sqlalchemy import create_engine
-from json import dumps
-from flask_jsonpify import jsonify
-from flask_cors import CORS
+import os
 import json
+from json import dumps
 
-db_connect = create_engine('sqlite:///chinook.db')
+from flask import Flask, request
+from flask_cors import CORS
+from flask_jsonpify import jsonify
+from flask_restful import Api, Resource
+from sqlalchemy import create_engine
+
+HOSTNAME = os.getenv('HOST', 'localhost')
+PORT = os.getenv('PORT', '5000')
+DB_FILE = os.getenv('DB_FILE', 'chinook.db')
+
+db_connect = create_engine(f'sqlite:///data/{DB_FILE}')
 app = Flask(__name__)
 api = Api(app)
-
 
 CORS(app)
 
@@ -54,4 +59,5 @@ api.add_resource(Employees_Title_Update,'/employees_update/<employee_id>') #atua
 
 
 if __name__ == '__main__':
-     app.run(host='192.168.0.10', port=5000)
+    app.run(host=HOSTNAME, port=PORT)
+    print('Started API')

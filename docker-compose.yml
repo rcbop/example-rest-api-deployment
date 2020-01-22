@@ -1,0 +1,42 @@
+version: '2.3'
+services:
+  employees_api:
+    container_name: restapi
+    image: ${DOCKER_IMAGE_NAME:-'employees-api'}:${DOCKER_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    build:
+      context: employees
+    environment:
+    - FLASK_APP=server.py
+    - HOST=0.0.0.0
+    - PORT=8080
+    - DB_FILE=chinook.db
+    - FLASK_ENV=${ENVIRONMENT:-production}
+    volumes:
+    - ./data/chinook.db:/app/data/chinook.db
+    entrypoint:
+    - python
+    command:
+    - /app/server.py
+
+  test_service:
+    container_name: test-service
+    build:
+      context: test_service
+    image: test_service:${DOCKER_IMAGE_TAG:-latest}
+    command: 
+    - nginx
+    - -g
+    - daemon off;
+    #command: tail -f /dev/null # for debugging
+    environment:
+    - API_SERVER=restapi:8080
+    ports:
+    - 8080:8080
+
+  data_wrapper:
+    container_name: data-sidecar
+    build:
+      context: data
+    image: ${DOCKER_DATA_IMAGE:-'data-wrapper'}:${DOCKER_IMAGE_TAG:-latest}
+    command: 'echo just to be pushed into ECR with dbdata'

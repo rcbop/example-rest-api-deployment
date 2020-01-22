@@ -1,17 +1,31 @@
-# restapi
-REST API Example using Python and Flask
+# Employees Restapi
 
-Based on example provided by:
-https://www.codementor.io/sagaragarwal94/building-a-basic-restful-api-in-python-58k02xsiq
+## Requirements
 
-Before execute this script please follow the setup instructions according to the link above.
-The script added to this repository includes GET, POST and DELETE HTTP methods using Python and Flask.
+* docker
+* docker-compose
+* python3
+* python3-pip
+* git
+* jq
+* bash
 
-To execute this script you should export enviroments below:
+## Local Deployment
 
-export FLASK_APP=your flas script
-export FLASK_ENV=development or production
+```bash
+./local-deploy.sh
+```
 
-To run:  flask --host=your hostname/ip --port:your target port
+or just
 
-This is a good resource to provide REST api for purposes in a reduced scope.
+```bash
+docker-compose up --build
+```
+
+## AWS Deployment Quick start
+
+```bash
+aws configure
+#... input credentials and default region
+ACCOUNT_ID=<YOUR_ACCOUNT_ID> bash ./aws-deploy.sh
+```

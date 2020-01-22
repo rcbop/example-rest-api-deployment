@@ -1,0 +1,54 @@
+{
+    "AWSEBDockerrunVersion": 2,
+    "volumes": [
+        {
+            "name": "sqlitedb",
+            "host": {
+                "sourcePath": "/var/app/db"
+            }
+        }
+    ],
+    "containerDefinitions": [
+        {
+            "name": "api",
+            "image": "949998518335.dkr.ecr.us-east-2.amazonaws.com/employees-api:master",
+            "environment": [
+                {
+                    "name": "HOST",
+                    "value": "0.0.0.0"
+                },
+                {
+                    "name": "PORT",
+                    "value": "8080"
+                }
+            ],
+            "portMappings": [
+                {
+                    "hostPort": 80,
+                    "containerPort": 8080
+                }
+            ],
+            "essential": true,
+            "memory": 128,
+            "mountPoints": [
+                {
+                    "sourceVolume": "sqlitedb",
+                    "containerPath": "/app/data/",
+                    "readOnly": true
+                }
+            ]
+        },
+        {
+            "name": "db-sidecar",
+            "image": "949998518335.dkr.ecr.us-east-2.amazonaws.com/data-wrapper:master",
+            "essential": false,
+            "memory": 50,
+            "mountPoints": [
+                {
+                    "sourceVolume": "sqlitedb",
+                    "containerPath": "/data/chinook.db"
+                }
+            ]
+        }
+    ]
+}
