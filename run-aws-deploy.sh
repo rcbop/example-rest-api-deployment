@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+#
+#  One script to rule them all, one script to find them, One script to bring them all and in the darkness bind them.
+#
 set -ex
 #AWS_SECRET_KEY_ID=${AWS_SECRET_ACCESS_KEY:?'Must provide access key id'}
 #AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:?'Must provide secret access key id'}
@@ -25,8 +28,10 @@ cleanup(){
     #aws configure set aws_access_key_id '' --profile "$AWS_PROFILE"
     #aws configure set aws_secret_access_key '' --profile "$AWS_PROFILE"
     cd "$CWD"
-    rm -f elasticbeanstalk/.ebextensions/eb-efs-config.yaml
-    rm -f elasticbeanstalk/deploy/*
+    echo 'cleaning up work dir'
+    rm -vf elasticbeanstalk/deploy/.ebextensions/eb-efs-config.yaml
+    rm -vf elasticbeanstalk/deploy/*
+    rm -vrf elasticbeanstalk/deploy/.*
 }
 
 trap cleanup EXIT
@@ -103,10 +108,10 @@ fi
 
 cd elasticbeanstalk
 echo 'Rendering dockerun eb template'
-eval "echo \"$(<Dockerrun.aws.single.tmpl)\"" 2> /dev/null > workdir/Dockerrun.aws.json
+eval "echo \"$(<Dockerrun.aws.single.json.tmpl)\"" 2> /dev/null > deploy/Dockerrun.aws.json
 
 # single container setup
-cd workdir
+cd deploy
 echo 'init elasticbeanstalk cli'
 eb init ${ENVIRONMENT_NAME} --region ${AWS_DEFAULT_REGION} -p "docker" --profile ${AWS_PROFILE}
 ENV_CHECK=$(eb list --profile ${AWS_PROFILE} | grep $ENVIRONMENT_NAME || echo 'NOT_CREATED')
@@ -117,7 +122,7 @@ if [[ "$ENV_CHECK" == 'NOT_CREATED' ]]; then
 else
     echo "Deploying on beanstalk environment :: ${ENVIRONMENT_NAME}"
     eb use ${ENVIRONMENT_NAME} --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
-    eb deploy ${ENVIRONMENT_NAME} -l $(date "+%Y%m%d-%H%M%S")-$(uuidgen) --staged --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
+    eb deploy ${ENVIRONMENT_NAME} -l "$(date "+%Y%m%d-%H%M%S")-$(uuidgen)" --staged --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
 fi
 
 sh "eb status --verbose"
