@@ -1,0 +1,20 @@
+{
+    \"HostedZoneId\": \"${HOSTED_ZONE_ID}\",
+    \"ChangeBatch\": {
+        \"Comment\": \"${EB_ENVIRONMENT_NAME}\",
+        \"Changes\": [
+            {
+                \"Action\": \"UPSERT\",
+                \"ResourceRecordSet\": {
+                    \"Name\": \"\",
+                    \"Type\": \"CNAME\",
+                    \"AliasTarget\": {
+                        \"HostedZoneId\": \"${HOSTED_ZONE_ID}\",
+                        \"DNSName\": \"${AWS_CF_DOMAIN_NAME}\",
+                        \"EvaluateTargetHealth\": false
+                    }
+                }
+            }
+        ]
+    }
+}

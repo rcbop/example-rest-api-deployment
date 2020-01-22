@@ -1,5 +1,11 @@
 # Employees RestAPI
 
+Available in http://example-rest-api-deployment.rogerpeixoto.net/
+
+or
+
+d2nk8979z63bee.cloudfront.net
+
 ## Requirements
 
 * docker

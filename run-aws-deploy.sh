@@ -43,7 +43,8 @@ cleanup(){
     rm -vf elasticbeanstalk/deploy/*
     rm -rf elasticbeanstalk/deploy/.elasticbeanstalk*
     rm -rf elasticbeanstalk/deploy/.gitignore
-    rm -rf cloudfront/cloudfront.json
+    #rm -rf cloudfront/cloudfront.json
+    #rm -rf route53/record-set.json
 }
 
 trap cleanup EXIT
@@ -98,6 +99,7 @@ CWD=$(pwd)
 
 APP_LIST=$(aws elasticbeanstalk describe-applications --profile ${AWS_PROFILE})
 
+######### EFS PERSISTENT STORAGE
 #EFS_CHECK=$(aws efs describe-file-systems --region ${AWS_DEFAULT_REGION} | jq '.FileSystems[].CreationToken')
 #
 #if [[ "${EFS_CHECK}" != *${EFS_TOKEN}* ]]; then
@@ -141,27 +143,46 @@ else
     eb deploy ${EB_ENVIRONMENT_NAME} -l "$(date "+%Y%m%d-%H%M%S")-$(uuidgen)" --staged --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
 fi
 
-sh "eb status --verbose"
 cd $CWD
 
-## CLOUDFRONT (CDN and reverse proxy)
+######### CLOUDFRONT (CDN and reverse proxy)
 export S3_ORIGIN_ID="S3-${TEST_PAGE_BUCKET}"
-export S3_DOMAIN_NAME="${S3_ORIGIN_ID}.s3-website-${AWS_DEFAULT_REGION}.amazonaws.com"
+export S3_BUCKET_DOMAIN="${TEST_PAGE_BUCKET}.s3.amazonaws.com"
 export ELB_ORIGIN_ID="ELB-${EB_ENVIRONMENT_NAME}"
 export CDN_COMMENT=${EB_ENVIRONMENT_NAME}
-ELB_DOMAIN_NAME=$(aws elasticbeanstalk describe-environments --environment-names ${EB_ENVIRONMENT_NAME} --query "Environments[?Status=='Ready'].EndpointURL"))
+export CALLER_REF=$(date "+%Y%m%d-%H%M%S")
+export DEFAULT_ROOT_OBJ='index.html'
+export CNAME_ALIAS='example-rest-api-deployment.rogerpeixoto.net'
+export ACM_CERTIFICATE_ID='daa792a7-9fe4-4d55-b095-ca56a282c4b0'
+export CERTIFICATE_ARN="arn:aws:acm:us-east-1:${AWS_ACCOUNT_ID}:certificate/${ACM_CERTIFICATE_ID}"
+ELB_DOMAIN_NAME=$(aws elasticbeanstalk describe-environments --environment-names ${EB_ENVIRONMENT_NAME} --query "Environments[?Status=='Ready'].EndpointURL" | jq '.[]' -r)
 export ELB_DOMAIN_NAME
+export HOSTED_ZONE_NAME='rogerpeixoto.net'
 
 cd cloudfront
 echo 'Rendering cloudfront configurations'
-eval "echo \"$(<cloudfront.config.skeleton.json)\"" 2> /dev/null > cloudfront.json
+eval "echo \"$(<cloudfront.config.skeleton.json.tmpl)\"" 2> /dev/null > cloudfront.json
+
+cat cloudfront.json | jq
 
 AWS_CF_LIST=$(aws cloudfront list-distributions --profile "${AWS_PROFILE}")
-if [[ "$CDN_COMMENT" != *${AWS_CF_LIST}* ]]; then
-    aws cloudfront create-distribution --default-root-object index.html --distribution-config cloudfront.json
-    AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]')
-    aws cloudfront wait distribution-deployed --id ${AWS_CF_ID}
+if [[ -z ${AWS_CF_LIST} ]]; then
+    aws cloudfront create-distribution --distribution-config file://cloudfront.json
+    AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r)
+    #aws cloudfront wait distribution-deployed --id ${AWS_CF_ID}
 else
-    AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]')
-    aws cloudfront create-invalidation --distribution-id ${AWS_CF_ID} --paths '*''
+    AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r)
+    aws cloudfront create-invalidation --distribution-id ${AWS_CF_ID} --paths '*'
 fi
+
+cd $CWD
+
+######### ROUTE 53 DNS SERVICE
+cd route53
+aws route53 create-hosted-zone --name ${HOSTED_ZONE_NAME} --caller-reference $(date "+%Y%m%d-%H%M%S") --hosted-zone-config Comment="${EB_ENVIRONMENT_NAME}"
+
+export HOSTED_ZONE_ID=$(aws route53 list-hosted-zones --query "HostedZones[?Config.Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r | xargs basename)
+export AWS_CF_DOMAIN_NAME=$(aws cloudfront list-distributions --query "DistributionList.Items[?Id=='${AWS_CF_ID}'].DomainName" | jq '.[]' -r)
+
+eval "echo \"$(<record-set.config.json.tmpl)\"" 2> /dev/null > record-set.json
+aws route53 change-resource-record-sets --hosted-zone-id ${HOSTED_ZONE_ID} --change-batch file://record-set.json
