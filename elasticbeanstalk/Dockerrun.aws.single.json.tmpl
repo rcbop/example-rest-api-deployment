@@ -1,0 +1,14 @@
+{
+    "AWSEBDockerrunVersion": "1",
+    "Image": {
+        "Name": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
+    },
+    "Ports": [
+        {
+            "ContainerPort": ${CONTAINER_PORT},
+            "HostPort": 8080
+        }
+    ],
+    "Entrypoint": "/usr/local/bin/python",
+    "Command": "server.py"
+}
