@@ -10,16 +10,27 @@
 * jq
 * bash
 
+
 ## Local Deployment
 
 ```bash
 ./run-local-deploy.sh
 ```
 
-## AWS Deployment Quick start
+## AWS deployment
+
+### Run setup
+
+Run setup script, input your AWS credentials (AWS_SECRET_KEY_ID, AWS_SECRET_ACCESS_KEY) and default region
 
 ```bash
-aws configure
-#... input credentials and default region
-AWS_ACCOUNT_ID=<YOUR_ACCOUNT_ID> bash ./run-aws-deploy.sh
+./setup-aws-tools.sh
+```
+
+### Run deployment script
+
+```bash
+export AWS_ACCOUNT_ID=<YOUR_ACCOUNT_ID>
+# start with bash -x to debug issues
+./run-aws-deploy.sh
 ```
