@@ -99,7 +99,7 @@ if [[ "${S3_BUCKETS}" != *${FRONTEND_BUCKET}* ]]; then
 fi
 
 echo 'Copying data'
-aws s3 cp ../test_service/testeget.html s3://${FRONTEND_BUCKET}/index.html --acl public-read --profile "${AWS_PROFILE}"
+aws s3 cp ../frontend/testeget.html s3://${FRONTEND_BUCKET}/index.html --acl public-read --profile "${AWS_PROFILE}"
 echo 'ok'
 
 echo 'Enabling web configuration for s3 bucket'
@@ -131,7 +131,7 @@ echo 'Pushing new docker image to ECR'
 docker push ${ECR_REGISTRY_ADDRESS}/${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}
 echo 'ok'
 
-CWD=$(pwd)
+AWSCWD=$(pwd)
 
 sep
 separator "Grant ECR read/pull rights to eb ec2 role"
@@ -175,7 +175,7 @@ else
     eb deploy ${EB_ENVIRONMENT_NAME} -l "$(date "+%Y%m%d-%H%M%S")-$(uuidgen)" --staged --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
 fi
 
-cd $CWD
+cd $AWSCWD
 
 ######### CLOUDFRONT (CDN and reverse proxy)
 sep
@@ -202,7 +202,7 @@ AWS_CF_LIST=$(aws cloudfront list-distributions --profile "${AWS_PROFILE}")
 if [[ -z ${AWS_CF_LIST} ]]; then
     aws cloudfront create-distribution --distribution-config file://cloudfront.json
     AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r)
-    aws cloudfront tag-resource --resource "arn:aws:cloudfront::${AWS_ACCOUNT_ID}:distribution/${AWS_CF_ID}" --tags "Key=${GROUP_TAG_KEY},Value=${GROUP_TAG_VALUE}"
+    aws cloudfront tag-resource --resource "arn:aws:cloudfront::${AWS_ACCOUNT_ID}:distribution/${AWS_CF_ID}" --tags "Items=[{Key=${GROUP_TAG_KEY},Value=${GROUP_TAG_VALUE}}"
     aws cloudfront wait distribution-deployed --id ${AWS_CF_ID}
 # else
 #     AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r)
@@ -210,7 +210,7 @@ if [[ -z ${AWS_CF_LIST} ]]; then
 #     aws cloudfront wait invalidation-complete --id ${AWS_CF_ID}
 fi
 
-cd $CWD
+cd $AWSCWD
 
 ######### ROUTE 53 DNS SERVICE
 cd route53
