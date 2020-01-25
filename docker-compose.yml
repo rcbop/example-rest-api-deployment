@@ -1,6 +1,6 @@
 version: '2.3'
 services:
-  employees_api:
+  employees_rest_api:
     container_name: restapi
     image: ${DOCKER_IMAGE_NAME:-employees-api}:${DOCKER_IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -13,6 +13,7 @@ services:
     - PORT=${SERVICE_PORT:-8080}
     - DB_FILE=chinook.db
     - FLASK_ENV=${ENVIRONMENT:-development}
+    - API_PREFIX=/api
     volumes:
     - ./data:/app/data
     entrypoint:
@@ -20,11 +21,11 @@ services:
     command:
     - /app/server.py
 
-  test_service:
-    container_name: test-service
+  frontend_nginx:
+    container_name: frontend-nginx
     build:
       context: frontend
-    image: test_service:${DOCKER_IMAGE_TAG:-latest}
+    image: frontend_nginx:${DOCKER_IMAGE_TAG:-latest}
     command: 
     - nginx
     - -g

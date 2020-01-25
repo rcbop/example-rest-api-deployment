@@ -17,7 +17,8 @@ export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 export DOCKER_IMAGE_NAME='employees-api'
 export DOCKER_IMAGE_TAG=${GIT_BRANCH}
 
-source ./setup-backend-envvars.sh
+source ./scripts/setup-backend-envvars.sh
+source ./scripts/utils.sh
 
 export AWS_PROFILE='default'
 export APP_NAME=${DOCKER_IMAGE_NAME}
@@ -29,13 +30,6 @@ export GROUP_TAG_KEY='resource-group'
 export GROUP_TAG_VALUE=${EB_ENVIRONMENT_NAME}
 
 CWD=$(pwd)
-
-sep(){
-    echo -e "\033[32;1m########################\033[0m"
-}
-separator(){
-    echo -e "\033[32;1;5m >>>> $1 \033[0m"
-}
 
 cleanup(){
     #echo 'Cleaning up credentials'
@@ -177,33 +171,6 @@ else
     eb deploy ${EB_ENVIRONMENT_NAME} -l "$(date "+%Y%m%d-%H%M%S")-$(uuidgen)" --staged --region ${AWS_DEFAULT_REGION} --profile ${AWS_PROFILE}
 fi
 
-cd $AWSCWD
+cd $CWD
 
-#############################
-######### CLOUDFRONT (CDN and reverse proxy)
-sep
-separator "Cloudfront deployment" 
-export S3_ORIGIN_ID="S3-${FRONTEND_BUCKET}"
-export S3_BUCKET_DOMAIN="${FRONTEND_BUCKET}.s3.amazonaws.com"
-export ELB_ORIGIN_ID="ELB-${EB_ENVIRONMENT_NAME}"
-export CDN_COMMENT=${EB_ENVIRONMENT_NAME}
-export CALLER_REF=$(date "+%Y%m%d-%H%M%S")
-export DEFAULT_ROOT_OBJ='index.html'
-export ACM_CERTIFICATE_ID='daa792a7-9fe4-4d55-b095-ca56a282c4b0'
-export CERTIFICATE_ARN="arn:aws:acm:us-east-1:${AWS_ACCOUNT_ID}:certificate/${ACM_CERTIFICATE_ID}"
-export ELB_DOMAIN_NAME=$(aws elasticbeanstalk describe-environments --environment-names ${EB_ENVIRONMENT_NAME} --query "Environments[?Status=='Ready'].EndpointURL" | jq '.[]' -r)
-export HOSTED_ZONE_NAME='rogerpeixoto.net'
-
-cd cloudfront
-echo 'Rendering cloudfront configurations'
-eval "echo \"$(<cloudfront.config.skeleton.json.tmpl)\"" 2> /dev/null > cloudfront.json
-
-cat cloudfront.json | jq
-
-AWS_CF_LIST=$(aws cloudfront list-distributions --profile "${AWS_PROFILE}")
-if [[ -z ${AWS_CF_LIST} ]]; then
-    aws cloudfront create-distribution --distribution-config file://cloudfront.json
-    AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r)
-    aws cloudfront tag-resource --resource "arn:aws:cloudfront::${AWS_ACCOUNT_ID}:distribution/${AWS_CF_ID}" --tags "Items=[{Key=${GROUP_TAG_KEY},Value=${GROUP_TAG_VALUE}}"
-    aws cloudfront wait distribution-deployed --id ${AWS_CF_ID}
-fi
+source ./scripts/run-cdn-deploy.sh

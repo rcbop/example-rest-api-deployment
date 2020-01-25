@@ -8,6 +8,8 @@ export AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.I
 export GROUP_TAG_KEY='resource-group'
 export GROUP_TAG_VALUE=${EB_ENVIRONMENT_NAME}
 
+source ./scripts/utils.sh
+
 ######### ROUTE 53 DNS SERVICE
 cd aws/route53
 
