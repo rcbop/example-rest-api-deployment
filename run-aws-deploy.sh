@@ -3,7 +3,7 @@
 #  One script to rule them all, 
 #  one script to find them, 
 #  One script to bring them all 
-#  and in the darkness bind them.
+#  And in the darkness bind them.
 #
 set -x
 set -e
@@ -15,7 +15,6 @@ export AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:?'Must provide account id'}
 export ECR_REGISTRY_ADDRESS=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 export DOCKER_IMAGE_NAME='employees-api'
-export DOCKER_DATA_IMAGE='data-wrapper'
 export DOCKER_IMAGE_TAG=${GIT_BRANCH}
 
 source ./setup-backend-envvars.sh
@@ -25,6 +24,9 @@ export APP_NAME=${DOCKER_IMAGE_NAME}
 export EB_ENVIRONMENT_NAME=${APP_NAME}-${GIT_BRANCH}
 export BACKEND_INSTANCE_TYPE='t2.micro'
 export FRONTEND_BUCKET="rcbop-test-service-${GIT_BRANCH}"
+
+export GROUP_TAG_KEY='resource-group'
+export GROUP_TAG_VALUE=${EB_ENVIRONMENT_NAME}
 
 CWD=$(pwd)
 
@@ -69,14 +71,12 @@ echo
 separator "Building docker images"
 docker-compose build
 
+#############################
 ######### RESOURCE GROUP
 sep
 separator "Creating resource group"
 
 cd aws
-
-export GROUP_TAG_KEY='resource-group'
-export GROUP_TAG_VALUE=${EB_ENVIRONMENT_NAME}
 
 RES_GROUPS=$(aws resource-groups list-groups --profile ${AWS_PROFILE})
 if [[ $RES_GROUPS != *$EB_ENVIRONMENT_NAME* ]]; then
@@ -86,6 +86,7 @@ if [[ $RES_GROUPS != *$EB_ENVIRONMENT_NAME* ]]; then
         --profile ${AWS_PROFILE}
 fi
 
+#############################
 ######### FRONTEND
 sep
 separator "S3 frontend deployment"
@@ -107,6 +108,7 @@ aws s3 website s3://${FRONTEND_BUCKET} --index-document index.html --profile "${
 echo 'ok'
 echo
 
+#############################
 ######### BACKEND
 sep
 separator "Elastic Beanstalk backend deployment"
@@ -177,6 +179,7 @@ fi
 
 cd $AWSCWD
 
+#############################
 ######### CLOUDFRONT (CDN and reverse proxy)
 sep
 separator "Cloudfront deployment" 
@@ -186,7 +189,6 @@ export ELB_ORIGIN_ID="ELB-${EB_ENVIRONMENT_NAME}"
 export CDN_COMMENT=${EB_ENVIRONMENT_NAME}
 export CALLER_REF=$(date "+%Y%m%d-%H%M%S")
 export DEFAULT_ROOT_OBJ='index.html'
-export CNAME_ALIAS='example-rest-api-deployment.rogerpeixoto.net'
 export ACM_CERTIFICATE_ID='daa792a7-9fe4-4d55-b095-ca56a282c4b0'
 export CERTIFICATE_ARN="arn:aws:acm:us-east-1:${AWS_ACCOUNT_ID}:certificate/${ACM_CERTIFICATE_ID}"
 export ELB_DOMAIN_NAME=$(aws elasticbeanstalk describe-environments --environment-names ${EB_ENVIRONMENT_NAME} --query "Environments[?Status=='Ready'].EndpointURL" | jq '.[]' -r)
@@ -204,29 +206,4 @@ if [[ -z ${AWS_CF_LIST} ]]; then
     AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r)
     aws cloudfront tag-resource --resource "arn:aws:cloudfront::${AWS_ACCOUNT_ID}:distribution/${AWS_CF_ID}" --tags "Items=[{Key=${GROUP_TAG_KEY},Value=${GROUP_TAG_VALUE}}"
     aws cloudfront wait distribution-deployed --id ${AWS_CF_ID}
-# else
-#     AWS_CF_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r)
-#     aws cloudfront create-invalidation --distribution-id ${AWS_CF_ID} --paths '/index.html'
-#     aws cloudfront wait invalidation-complete --id ${AWS_CF_ID}
 fi
-
-cd $AWSCWD
-
-######### ROUTE 53 DNS SERVICE
-cd route53
-
-sep
-separator "Route53 dns creation\033[0m" 
-
-HOSTED_ZONE_ID=$(aws route53 list-hosted-zones --query "HostedZones[?Config.Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r | xargs basename)
-if [ -z $HOSTED_ZONE_ID ]; then
-    aws route53 create-hosted-zone --name ${HOSTED_ZONE_NAME} --caller-reference $(date "+%Y%m%d-%H%M%S") --hosted-zone-config Comment="${EB_ENVIRONMENT_NAME}"
-fi
-export HOSTED_ZONE_ID=$(aws route53 list-hosted-zones --query "HostedZones[?Config.Comment=='${EB_ENVIRONMENT_NAME}'].Id" | jq '.[]' -r | xargs basename)
-aws route53 change-tags-for-resource --resource-type 'hostedzone' --resource-id $HOSTED_ZONE_ID --add-tags "Key=${GROUP_TAG_KEY},Value=${GROUP_TAG_VALUE}"
-
-export AWS_CF_DOMAIN_NAME=$(aws cloudfront list-distributions --query "DistributionList.Items[?Id=='${AWS_CF_ID}'].DomainName" | jq '.[]' -r)
-
-eval "echo \"$(<record-set.config.json.tmpl)\"" 2> /dev/null > record-set.json
-cat record-set.json | jq
-aws route53 change-resource-record-sets --hosted-zone-id ${HOSTED_ZONE_ID} --change-batch file://record-set.json
